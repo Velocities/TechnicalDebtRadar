@@ -1,0 +1,27 @@
+# sbt / Scala build output
+target/
+project/target/
+project/project/
+.bsp/
+
+# Packaging output
+stage/
+dist/
+
+# Compiled class / jar artifacts
+*.class
+*.jar
+
+# Metals / Bloop (Scala language server)
+.metals/
+.bloop/
+metals.sbt
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+
+# OS cruft
+.DS_Store
+Thumbs.db
