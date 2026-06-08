@@ -65,16 +65,9 @@ object GraphBuilder:
     val nodes = buildNodes(scanned, history)
     // The full set of file paths available in this repository (for resolving imports)
     val knownPaths = nodes.keySet
-    // For each scanned file, in parallel:
+    // For each scanned file, resolve its edges in parallel:
     Future
-      .traverse(scanned) { scannedFile =>
-        Future {
-          // Resolve all imports for this file to known file paths, removing any self-imports to avoid self edges
-          val resolved = scannedFile.imports.flatMap(resolve(_, knownPaths)) - scannedFile.relativePath
-          // Output a tuple: (file, its resolved dependency set)
-          scannedFile.relativePath -> resolved
-        }
-      }
+      .traverse(scanned)(scannedFile => Future(resolveEdges(scannedFile, knownPaths)))
       // Once all parallel import resolutions are done, assemble the ArchitectureGraph
       .map(edges => ArchitectureGraph(nodes, edges.toMap))
 
@@ -97,10 +90,7 @@ object GraphBuilder:
     val knownPaths = nodes.keySet
 
     // For each scanned file, attempt to resolve each import to another known file path, discarding self-imports.
-    val edges = scanned.map { scannedFile =>
-      val resolvedImports: Set[String] = scannedFile.imports.flatMap(resolve(_, knownPaths)) - scannedFile.relativePath
-      scannedFile.relativePath -> resolvedImports
-    }.toMap
+    val edges = scanned.map(scannedFile => resolveEdges(scannedFile, knownPaths)).toMap
 
     ArchitectureGraph(nodes, edges)
 
@@ -127,6 +117,16 @@ object GraphBuilder:
         contributors = fileHistoryOpt.map(_.contributors.size).getOrElse(0)
       )
     }.toMap
+
+  /** Resolves a single file's import targets into a graph edge:
+    * `(file path -> set of resolved dependency paths)`, with self-edges removed.
+    */
+  private def resolveEdges(
+      scannedFile: ScannedFile,
+      knownPaths: Set[String]
+  ): (String, Set[String]) =
+    val resolved = scannedFile.imports.flatMap(resolve(_, knownPaths)) - scannedFile.relativePath
+    scannedFile.relativePath -> resolved
 
   /** Best-effort resolution of an import target to a known file path.
     *
