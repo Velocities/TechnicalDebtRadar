@@ -40,38 +40,139 @@ Repository
 
 The IR acts as a common representation shared across all supported languages.
 
-## Version 1 Goals
+## Version 1.0 - Repository Analysis
+
+Goal:
+Analyze a local repository and identify architectural characteristics.
 
 Input:
 
 * Local Git repository
 
-Analysis:
+Features:
 
 * File dependency graph
+* Class dependency graph
 * Import relationships
+* Dependency fan-in and fan-out
 * File size
+* Method count
+* Field count
+* Class count
+* Function count
 * Git churn
 * Contributor count
+* Circular dependency detection
+* Dependency hotspots
+* Risk indicators
+* Tree-sitter support
+* Service-level analysis
+* Console report
 
 Output:
+Current repository architecture snapshot — risk scores, hotspot report, and dependency graph.
 
-* Risk scores
-* Hotspot report
-* Dependency graph
-* Circular dependency detection
+---
 
-## Future Goals
+## Version 1.5 - Trend Analysis
 
-* Tree-sitter support
-* Class-level analysis
-* Service-level analysis
+Goal:
+Understand how architecture evolves over time.
+
+Features:
+
+* Dependency growth tracking
+* Method growth tracking
+* Field growth tracking
+* Churn trend reporting
+* Stability metrics
 * Architecture drift tracking
-* Historical trend analysis
-* Pull request risk analysis
+* Historical comparison reports
+
+Output:
+Architectural trend report.
+
+---
+
+## Version 2.0 - Standards & Governance
+
+Goal:
+Allow teams to define engineering standards.
+
+Features:
+
+* Custom architecture budgets
+* Documentation coverage targets
+* Dependency limits
+* Method count limits
+* Constructor parameter limits
 * Team ownership analysis
-* AI-assisted explanations
+* Compliance reporting
+
+Output:
+Standards compliance report.
+
+---
+
+## Version 3.0 - Pull Request Analysis
+
+Goal:
+Analyze architectural impact of code changes.
+
+Features:
+
+* Git diff analysis
+* Pull request architecture delta
+* Dependency change detection
+* Complexity change detection
+* Documentation change detection
+* Risk increase/decrease reporting
+
+Output:
+Architectural impact report for pull requests.
+
+---
+
+## Version 3.5 - GitHub Actions (Beta)
+
+Goal:
+Integrate architecture analysis into CI/CD pipelines.
+
+Features:
+
+* GitHub Actions support
+* Pull request comments
+* Automated reports
+* Trend tracking across builds
 * Self-hosted enterprise deployments
+
+Output:
+Continuous architecture monitoring.
+
+---
+
+## Version 4.0 - AI Assistance
+
+Goal:
+Provide architecture guidance.
+
+Features:
+
+* Risk explanations
+* Refactoring suggestions
+* Architecture summaries
+* Design recommendations
+
+Output:
+AI-generated architecture guidance.
+
+---
+
+Core Principle:
+
+Technical Debt Radar does not attempt to determine whether code is objectively good or bad.
+
+Instead, it measures architectural characteristics, highlights trends, and surfaces potential risks for engineering teams to evaluate.
 
 ## Success Criteria
 
