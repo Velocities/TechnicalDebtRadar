@@ -128,11 +128,9 @@ object GraphBuilder:
     val resolved = scannedFile.imports.flatMap(resolve(_, knownPaths)) - scannedFile.relativePath
     scannedFile.relativePath -> resolved
 
-  /** Best-effort resolution of an import target to a known file path.
-    *
-    * We normalize dotted module names to slash paths and look for a known file
-    * whose path (sans extension) ends with the target. This is intentionally
-    * approximate; precise resolution is a Future Goal (Tree-sitter).
+  /** Attempts to map a referenced dependency (as written in source code) to an actual source file path present in the project.
+    * Converts import/module names to a comparable path format (e.g. "java.util.List" -> "java/util/List") and searches for
+    * a matching file (with or without extension). Used to approximate dependency links.
     */
   private[parser] def resolve(target: String, knownPaths: Set[String]): Option[String] =
     val normalized = target.replace('.', '/').stripPrefix("./").stripPrefix("/")
