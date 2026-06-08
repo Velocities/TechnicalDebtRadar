@@ -8,8 +8,11 @@ import scala.util.Using
   * targets extracted from it.
   */
 final case class ScannedFile(
+    // Relative path to the root of the repository
     relativePath: String,
+    // Lines of code
     loc: Int,
+    // Import targets
     imports: Set[String]
 )
 
@@ -23,11 +26,32 @@ object RepositoryScanner:
   private val ignoredDirs: Set[String] =
     Set(".git", "target", "node_modules", "build", "dist", ".idea", ".bsp", "venv", ".venv")
 
+  /** Sequential scan. Kept for simple callers and tests; the CLI uses the
+    * parallel path in [[tdr.parser.GraphBuilder]].
+    */
   def scan(root: File, extensions: Set[String] = defaultExtensions): List[ScannedFile] =
-    walk(root)
-      .filter(f => extensions.contains(extensionOf(f.getName)))
-      .map(f => scanFile(root, f))
+    sourceFiles(root, extensions).map(f => scanFile(root, f))
 
+  /** Cheap directory walk: lists candidate source files without reading them.
+    * Reading/parsing each file (the expensive, I/O-bound part) is done
+    * separately so it can be parallelized across files.
+    */
+  def sourceFiles(root: File, extensions: Set[String] = defaultExtensions): List[File] =
+    walk(root).filter(f => extensions.contains(extensionOf(f.getName)))
+
+  /** Reads and parses a single file. Blocking I/O — safe to run on a virtual
+    * thread.
+    */
+  def scanFile(root: File, file: File): ScannedFile =
+    val content = Using(Source.fromFile(file, "UTF-8"))(_.getLines().toList)
+      .getOrElse(Nil)
+    val loc = content.count(_.trim.nonEmpty)
+    val imports = content.flatMap(ImportParser.importsIn).toSet
+    ScannedFile(relativePath(root, file), loc, imports)
+
+  /**
+    * Walks the directory and returns a list of files.
+    */
   private def walk(dir: File): List[File] =
     val entries = Option(dir.listFiles()).map(_.toList).getOrElse(Nil)
     entries.flatMap { f =>
@@ -36,13 +60,9 @@ object RepositoryScanner:
       else List(f)
     }
 
-  private def scanFile(root: File, file: File): ScannedFile =
-    val content = Using(Source.fromFile(file, "UTF-8"))(_.getLines().toList)
-      .getOrElse(Nil)
-    val loc = content.count(_.trim.nonEmpty)
-    val imports = content.flatMap(ImportParser.importsIn).toSet
-    ScannedFile(relativePath(root, file), loc, imports)
-
+/**
+ * Returns the relative path of the file from the root of the repository.
+ */
   private def relativePath(root: File, file: File): String =
     root.toPath.relativize(file.toPath).toString.replace('\\', '/')
 

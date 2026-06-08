@@ -27,12 +27,16 @@ engine never needs to know which language produced the data.
 
 **To build / develop:**
 
-| Tool  | Version used | Notes                                  |
-| ----- | ------------ | -------------------------------------- |
-| JDK   | 17           | `jpackage`/`jlink` ship with JDK 14+   |
-| sbt   | 1.12.x       | pinned in `project/build.properties`   |
-| Scala | 3.8.3        | resolved automatically by sbt          |
-| Git   | any recent   | invoked at runtime for churn/authors   |
+| Tool  | Version used | Notes                                              |
+| ----- | ------------ | -------------------------------------------------- |
+| JDK   | **21+**      | required for virtual threads (JEP 444) + jpackage  |
+| sbt   | 1.12.x       | pinned in `project/build.properties`               |
+| Scala | 3.8.3        | resolved automatically by sbt                      |
+| Git   | any recent   | invoked at runtime for churn/authors               |
+
+> The build sets a `-release:21` floor. Make sure sbt runs on JDK 21+ — set
+> `JAVA_HOME` to a JDK 21 install (e.g. `winget install Microsoft.OpenJDK.21`),
+> or pass `sbt -java-home "<jdk21>"`.
 
 **To run the standalone binary:** nothing — the bundled launcher ships its own
 Java runtime. The only runtime dependency is **`git`** on your `PATH` (used to
@@ -62,10 +66,12 @@ TechnicalDebtRadar/
    │     │  └─ ArchitectureGraph.scala   Language-independent IR
    │     ├─ git/
    │     │  └─ GitHistory.scala          Churn + contributors via `git log`
+   │     ├─ concurrent/
+   │     │  └─ Concurrency.scala         Virtual-thread executor / ExecutionContext
    │     ├─ parser/
    │     │  ├─ RepositoryScanner.scala   Walks files, counts LOC
    │     │  ├─ ImportParser.scala        Multi-language import extraction
-   │     │  └─ GraphBuilder.scala        Fuses scan + git + imports into the IR
+   │     │  └─ GraphBuilder.scala        Fuses scan + git + imports into the IR (parallel)
    │     ├─ analysis/
    │     │  ├─ RiskCalculator.scala      Risk scoring + ranking
    │     │  └─ CycleDetector.scala       Circular dependencies (Tarjan SCC)
@@ -85,6 +91,37 @@ TechnicalDebtRadar/
    into an `ArchitectureGraph`.
 4. `RiskCalculator` and `CycleDetector` analyze the graph.
 5. `Report` renders the hotspot table and the list of circular dependencies.
+
+---
+
+## Concurrency & Performance
+
+On large repositories the cost is dominated by **blocking** work: reading and
+parsing thousands of files, plus waiting on the `git log` subprocess. The
+pipeline exploits this:
+
+- **Git history and file scanning run concurrently.** They are independent, so
+  `GraphBuilder.buildAsync` launches both as `Future`s up front and joins them.
+- **Per-file reads/parsing are fanned out** with `Future.traverse`, and edge
+  resolution (roughly O(files²)) is parallelized the same way.
+
+These tasks run on **virtual threads** (JDK 21+, JEP 444) via an
+`ExecutionContext` backed by `Executors.newVirtualThreadPerTaskExecutor()` (see
+`tdr/concurrent/Concurrency.scala`). Virtual threads are the right tool here for
+two reasons:
+
+1. **Blocking I/O scales cheaply.** A virtual thread that blocks on a file read
+   or the git subprocess is *unmounted* from its carrier OS thread, so we can
+   have thousands of in-flight blocking tasks without exhausting OS threads.
+2. **No thread-pool starvation/deadlock.** The classic hazard — tasks on a
+   bounded pool blocking while waiting on other tasks queued in the *same*
+   pool — does not apply, because each task gets its own virtual thread instead
+   of competing for a small set of carrier threads. The single blocking
+   `Await` lives on the *calling* thread (`Concurrency.withVirtualThreads`),
+   never on a pool thread.
+
+`CycleDetector` (Tarjan SCC) is left sequential — it is inherently
+order-dependent and cheap relative to scanning.
 
 ---
 

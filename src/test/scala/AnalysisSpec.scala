@@ -2,8 +2,8 @@ import org.scalatest.funsuite.AnyFunSuite
 
 import tdr.ir.{ArchitectureGraph, FileNode}
 import tdr.analysis.{CycleDetector, RiskCalculator}
-import tdr.parser.ImportParser
-import tdr.git.GitHistory
+import tdr.parser.{GraphBuilder, ImportParser, ScannedFile}
+import tdr.git.{FileHistory, GitHistory}
 
 class AnalysisSpec extends AnyFunSuite:
 
@@ -60,6 +60,22 @@ class AnalysisSpec extends AnyFunSuite:
     assert(ImportParser.importsIn("from os.path import join").contains("os.path"))
     assert(ImportParser.importsIn("""import { x } from './util'""").contains("./util"))
     assert(ImportParser.importsIn("const fs = require('fs')").contains("fs"))
+  }
+
+  test("graph assembly resolves imports and merges git metrics") {
+    val scanned = List(
+      ScannedFile("src/A.scala", loc = 20, imports = Set("pkg.B")),
+      ScannedFile("src/pkg/B.scala", loc = 10, imports = Set.empty)
+    )
+    val history = Map(
+      "src/A.scala" -> FileHistory("src/A.scala", churn = 3, contributors = Set("Alice", "Bob"))
+    )
+    val graph = GraphBuilder.assemble(scanned, history)
+
+    assert(graph.nodes("src/A.scala").churn == 3)
+    assert(graph.nodes("src/A.scala").contributors == 2)
+    assert(graph.nodes("src/pkg/B.scala").churn == 0)
+    assert(graph.dependencies("src/A.scala") == Set("src/pkg/B.scala"))
   }
 
   test("git log parsing aggregates churn and contributors") {

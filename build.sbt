@@ -12,7 +12,10 @@ lazy val root = project
     scalacOptions ++= Seq(
       "-deprecation",
       "-feature",
-      "-unchecked"
+      "-unchecked",
+      // Requires JDK 21+: the analyzer uses virtual threads (JEP 444) for
+      // parallel, blocking file I/O. This sets the bytecode/API floor.
+      "-release:21"
     ),
 
     libraryDependencies ++= Seq(

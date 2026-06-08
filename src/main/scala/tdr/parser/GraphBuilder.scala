@@ -1,40 +1,132 @@
 package tdr.parser
 
 import java.io.File
+import scala.concurrent.{ExecutionContext, Future, blocking}
+import tdr.concurrent.Concurrency
 import tdr.git.{FileHistory, GitHistory}
 import tdr.ir.{ArchitectureGraph, FileNode}
 
 /** Assembles the Architecture IR from the three Version 1 data sources:
   * the file system (scanner), Git history, and extracted imports.
+  *
+  * The two slow stages — reading every file and shelling out to `git log` —
+  * are independent and run concurrently on virtual threads. Per-file reads and
+  * per-file import resolution are also fanned out across files.
   */
 object GraphBuilder:
 
+  /** Blocking convenience entry point. Manages its own virtual-thread executor
+    * and blocks the calling thread (only) until the graph is ready. */
   def build(repoDir: File): ArchitectureGraph =
-    val scanned = RepositoryScanner.scan(repoDir)
-    val history = GitHistory.analyze(repoDir)
-    build(scanned, history)
+    Concurrency.withVirtualThreads(buildAsync(repoDir))
 
-  private[parser] def build(
+  /** Asynchronous pipeline. Git history and file scanning are launched up front
+    * so they overlap; the graph is assembled once both complete.
+    */
+  def buildAsync(repoDir: File)(using ExecutionContext): Future[ArchitectureGraph] =
+    // Launched eagerly -> these two run concurrently.
+    // Kick off analysis of git history in the background (runs on a virtual thread)
+    val historyF: Future[Map[String, FileHistory]] =
+      Future {
+        blocking(
+          GitHistory.analyze(repoDir)
+        )
+      }
+
+    // Gather all source files to scan, then scan each file in parallel (also on virtual threads)
+    val scannedF: Future[List[ScannedFile]] =
+      val files = RepositoryScanner.sourceFiles(repoDir)
+      Future.traverse(files) { file =>
+        Future {
+          blocking(
+            RepositoryScanner.scanFile(repoDir, file)
+          )
+        }
+      }
+
+    // Once both the git history and file scanning complete, assemble the architecture graph (edges in parallel)
+    for
+      history <- historyF
+      scanned <- scannedF
+      graph   <- assembleAsync(
+        scanned = scanned,
+        history = history
+      )
+    yield graph
+
+  /** Builds nodes (cheap) then resolves edges in parallel across files. */
+  private def assembleAsync(
+      // Scanned source files with LOC and import targets
+      scanned: List[ScannedFile],
+      // Git history data (churn and contributors) for each file
+      history: Map[String, FileHistory]
+  )(using ExecutionContext): Future[ArchitectureGraph] =
+    // First, build the set of nodes containing per-file metrics (combining scanned source files and git history)
+    val nodes = buildNodes(scanned, history)
+    // The full set of file paths available in this repository (for resolving imports)
+    val knownPaths = nodes.keySet
+    // For each scanned file, in parallel:
+    Future
+      .traverse(scanned) { scannedFile =>
+        Future {
+          // Resolve all imports for this file to known file paths, removing any self-imports to avoid self edges
+          val resolved = scannedFile.imports.flatMap(resolve(_, knownPaths)) - scannedFile.relativePath
+          // Output a tuple: (file, its resolved dependency set)
+          scannedFile.relativePath -> resolved
+        }
+      }
+      // Once all parallel import resolutions are done, assemble the ArchitectureGraph
+      .map(edges => ArchitectureGraph(nodes, edges.toMap))
+
+  /** 
+    * Pure, synchronous assembler for building an ArchitectureGraph.
+    * 
+    * This is used in unit tests and for simple (non-parallel) callers.
+    * 
+    * - Builds the set of nodes by combining file scan metrics and git history.
+    * - For each scanned file, attempts to resolve each import to a known file path.
+    *   - Each edge in the graph indicates that the file imports (depends on) another resolved file.
+    *   - Self-dependencies are explicitly removed.
+    * - The resulting graph models per-file metrics and their dependency relationships.
+    */
+  def assemble(
       scanned: List[ScannedFile],
       history: Map[String, FileHistory]
   ): ArchitectureGraph =
-    val nodes: Map[String, FileNode] = scanned.map { f =>
-      val h = history.get(f.relativePath)
-      f.relativePath -> FileNode(
-        path = f.relativePath,
-        loc = f.loc,
-        churn = h.map(_.churn).getOrElse(0),
-        contributors = h.map(_.contributors.size).getOrElse(0)
-      )
-    }.toMap
-
+    val nodes = buildNodes(scanned, history)
     val knownPaths = nodes.keySet
-    val edges: Map[String, Set[String]] = scanned.map { f =>
-      val resolved = f.imports.flatMap(resolve(_, knownPaths)) - f.relativePath
-      f.relativePath -> resolved
+
+    // For each scanned file, attempt to resolve each import to another known file path, discarding self-imports.
+    val edges = scanned.map { scannedFile =>
+      val resolvedImports: Set[String] = scannedFile.imports.flatMap(resolve(_, knownPaths)) - scannedFile.relativePath
+      scannedFile.relativePath -> resolvedImports
     }.toMap
 
     ArchitectureGraph(nodes, edges)
+
+  /** 
+    * Combines data from scanned source files and Git history to produce per-file metrics in FileNode form.
+    * 
+    * For each scanned file:
+    *   - Extracts LOC from scan
+    *   - Looks up churn (commits) and number of contributors from Git history, defaulting to 0 if missing
+    * 
+    * Returns a map of relative paths to corresponding FileNode representing each file's metrics.
+    */
+  private def buildNodes(
+      scanned: List[ScannedFile],
+      history: Map[String, FileHistory]
+  ): Map[String, FileNode] =
+    scanned.map { scannedFile =>
+      // Retrieve git history for this file if available
+      val fileHistoryOpt = history.get(scannedFile.relativePath)
+      scannedFile.relativePath -> FileNode(
+        path = scannedFile.relativePath,
+        loc = scannedFile.loc,
+        churn = fileHistoryOpt.map(_.churn).getOrElse(0),
+        contributors = fileHistoryOpt.map(_.contributors.size).getOrElse(0)
+      )
+    }.toMap
 
   /** Best-effort resolution of an import target to a known file path.
     *
