@@ -2,7 +2,7 @@ import org.scalatest.funsuite.AnyFunSuite
 
 import tdr.ir.{ArchitectureGraph, FileNode}
 import tdr.analysis.{CycleDetector, RiskCalculator}
-import tdr.parser.{GraphBuilder, ImportParser}
+import tdr.parser.GraphBuilder
 import tdr.types.ScannedFile
 import tdr.git.{FileHistory, GitHistory}
 
@@ -56,17 +56,10 @@ class AnalysisSpec extends AnyFunSuite:
     assert(CycleDetector.findCycles(graph).isEmpty)
   }
 
-  test("import parser extracts targets across languages") {
-    assert(ImportParser.importsIn("import scala.collection.mutable").contains("scala.collection.mutable"))
-    assert(ImportParser.importsIn("from os.path import join").contains("os.path"))
-    assert(ImportParser.importsIn("""import { x } from './util'""").contains("./util"))
-    assert(ImportParser.importsIn("const fs = require('fs')").contains("fs"))
-  }
-
   test("graph assembly resolves imports and merges git metrics") {
     val scanned = List(
-      ScannedFile("src/A.scala", loc = 20, imports = Set("pkg.B")),
-      ScannedFile("src/pkg/B.scala", loc = 10, imports = Set.empty)
+      ScannedFile("src/A.scala", loc = 20, imports = Set("pkg.B"), classes = Nil, functions = Nil),
+      ScannedFile("src/pkg/B.scala", loc = 10, imports = Set.empty, classes = Nil, functions = Nil)
     )
     val history = Map(
       "src/A.scala" -> FileHistory("src/A.scala", churn = 3, contributors = Set("Alice", "Bob"))

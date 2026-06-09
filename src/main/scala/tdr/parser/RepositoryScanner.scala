@@ -5,6 +5,8 @@ import scala.io.Source
 import scala.util.Using
 import tdr.types.ScannedFile
 
+// This class is responsible for scanning the repository and returning a list of ScannedFile objects
+// These ScannedFile objects contain info about the file and its contents (e.g. lines of code, imports, classes, functions)
 object RepositoryScanner:
 
   /** Source extensions we attempt to analyze. Add more as parsers improve. */
@@ -36,7 +38,10 @@ object RepositoryScanner:
       .getOrElse(Nil)
     val loc = content.count(_.trim.nonEmpty)
     val imports = content.flatMap(ImportParser.importsIn).toSet
-    ScannedFile(relativePath(root, file), loc, imports)
+    // Nesting-aware parse so methods/fields are attached to their class; the file
+    // extension selects the block style (braces vs Python indent vs Ruby end).
+    val structure = StructureParser.parse(content, extensionOf(file.getName))
+    ScannedFile(relativePath(root, file), loc, imports, structure.classes, structure.functions)
 
   /**
     * Walks the directory and returns a list of files.

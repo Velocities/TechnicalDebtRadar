@@ -9,5 +9,8 @@ final case class ScannedFile(
     // Lines of code
     loc: Int,
     // Import targets
-    imports: Set[String]
+    imports: Set[String],
+    // Classes and functions found in the file
+    classes: List[ClassEntity],
+    functions: List[FunctionEntity]
 )
