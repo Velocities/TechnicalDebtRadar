@@ -37,11 +37,11 @@ object RepositoryScanner:
     val content = Using(Source.fromFile(file, "UTF-8"))(_.getLines().toList)
       .getOrElse(Nil)
     val loc = content.count(_.trim.nonEmpty)
-    val imports = content.flatMap(ImportParser.importsIn).toSet
-    // Nesting-aware parse so methods/fields are attached to their class; the file
-    // extension selects the block style (braces vs Python indent vs Ruby end).
-    val structure = StructureParser.parse(content, extensionOf(file.getName))
-    ScannedFile(relativePath(root, file), loc, imports, structure.classes, structure.functions)
+    // Tree-sitter parses the whole file into a concrete syntax tree, from which
+    // we read imports plus the classes (with their methods/fields) and the
+    // top-level functions. The extension selects the language grammar.
+    val parsed = TreeSitterParser.parse(content.mkString("\n"), extensionOf(file.getName))
+    ScannedFile(relativePath(root, file), loc, parsed.imports, parsed.classes, parsed.functions)
 
   /**
     * Walks the directory and returns a list of files.

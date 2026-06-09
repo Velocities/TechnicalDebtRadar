@@ -68,10 +68,11 @@ TechnicalDebtRadar/
    │     │  └─ GitHistory.scala          Churn + contributors via `git log`
    │     ├─ concurrent/
    │     │  └─ Concurrency.scala         Virtual-thread executor / ExecutionContext
-   │     ├─ parser/
-   │     │  ├─ RepositoryScanner.scala   Walks files, counts LOC
-   │     │  ├─ ImportParser.scala        Multi-language import extraction
-   │     │  └─ GraphBuilder.scala        Fuses scan + git + imports into the IR (parallel)
+│     ├─ parser/
+│     │  ├─ RepositoryScanner.scala   Walks files, counts LOC
+│     │  ├─ TreeSitterLanguages.scala Maps file extension -> tree-sitter grammar
+│     │  ├─ TreeSitterParser.scala    Tree-sitter parse: imports, classes, functions
+│     │  └─ GraphBuilder.scala        Fuses scan + git + imports into the IR (parallel)
    │     ├─ analysis/
    │     │  ├─ RiskCalculator.scala      Risk scoring + ranking
    │     │  └─ CycleDetector.scala       Circular dependencies (Tarjan SCC)
@@ -84,7 +85,10 @@ TechnicalDebtRadar/
 ### How the pieces fit together
 
 1. `RepositoryScanner` walks the repo, skipping `target/`, `node_modules/`,
-   `.git/`, etc., recording lines of code and raw import strings per file.
+   `.git/`, etc. For each source file it counts lines of code and runs
+   `TreeSitterParser`, which builds a real concrete syntax tree (via the
+   tree-sitter grammar for that language) to extract imports, classes (with
+   their methods and fields) and top-level functions.
 2. `GitHistory` runs `git log` and aggregates per-file **churn** (commit count)
    and **contributor** set.
 3. `GraphBuilder` resolves import strings to file paths and merges everything
@@ -227,8 +231,9 @@ java -jar target/scala-3.8.3/technical-debt-radar.jar /path/to/repo
 
 This is an intentionally lightweight Version 1 scaffold. Known rough edges:
 
-- **Import resolution** (`GraphBuilder.resolve`) is a substring heuristic; the
-  README's Tree-sitter goal would make dependency edges precise.
+- **Import resolution** (`GraphBuilder.resolve`) is a substring heuristic.
+  Import *targets* are now extracted precisely by tree-sitter, but mapping a
+  target back to a file on disk still relies on path-suffix matching.
 - **Risk weighting** (`RiskCalculator.score`) is a reasonable starting formula,
   not calibrated against real incident data.
 - The bundled runtime is the full JDK; it can be slimmed with `jlink`/`jdeps`
