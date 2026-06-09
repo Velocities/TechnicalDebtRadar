@@ -31,5 +31,7 @@ jobs:
       - name: Set up sbt
         uses: sbt/setup-sbt@v1
 
-      - name: Compile (main + tests)
+      - name: Compile (main + tests, do not run them)
+        # Compile both main and test sources (does not actually run tests, just compiles them)
         run: sbt -batch "Test / compile"
+ 
