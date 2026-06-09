@@ -28,7 +28,7 @@ object Report:
     sb.append("-" * 40).append("\n")
     if scores.isEmpty then sb.append("  (no files found)\n")
     else
-      sb.append(f"  ${"risk"}%8s  ${"loc"}%6s  ${"churn"}%6s  ${"auth"}%5s  ${"coupl"}%6s  file\n")
+      sb.append(f"  ${"risk"}%8s  ${"loc"}%6s  ${"churn"}%6s  ${"authors"}%5s  ${"coupling"}%6s  file\n")
       for s <- scores.take(topN) do
         sb.append(
           f"  ${s.score}%8.2f  ${s.loc}%6d  ${s.churn}%6d  ${s.contributors}%5d  ${s.coupling}%6d  ${s.path}\n"
