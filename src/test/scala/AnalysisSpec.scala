@@ -2,7 +2,8 @@ import org.scalatest.funsuite.AnyFunSuite
 
 import tdr.ir.{ArchitectureGraph, FileNode}
 import tdr.analysis.{CycleDetector, RiskCalculator}
-import tdr.parser.{GraphBuilder, ImportParser, ScannedFile}
+import tdr.parser.{GraphBuilder, ImportParser}
+import tdr.types.ScannedFile
 import tdr.git.{FileHistory, GitHistory}
 
 class AnalysisSpec extends AnyFunSuite:

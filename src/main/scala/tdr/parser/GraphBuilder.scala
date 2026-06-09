@@ -5,6 +5,7 @@ import scala.concurrent.{ExecutionContext, Future, blocking}
 import tdr.concurrent.Concurrency
 import tdr.git.{FileHistory, GitHistory}
 import tdr.ir.{ArchitectureGraph, FileNode}
+import tdr.types.ScannedFile
 
 /** Assembles the Architecture IR from the three Version 1 data sources:
   * the file system (scanner), Git history, and extracted imports.
