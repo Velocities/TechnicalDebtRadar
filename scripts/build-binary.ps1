@@ -55,6 +55,7 @@ Write-Host "==> Packaging standalone binary (jpackage)..."
   --input stage `
   --main-jar technical-debt-radar.jar `
   --main-class radar `
+  --win-console `
   --dest dist
 
 Write-Host ""

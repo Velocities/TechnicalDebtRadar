@@ -209,11 +209,15 @@ sbt assembly                       # → target/scala-3.8.3/technical-debt-radar
 mkdir stage && cp target/scala-3.8.3/technical-debt-radar.jar stage/
 jpackage --type app-image --name radar \
   --input stage --main-jar technical-debt-radar.jar \
-  --main-class radar --dest dist
+  --main-class radar --win-console --dest dist
 ```
 
 (We stage the JAR in its own folder because `jpackage --input` bundles every
 file in that directory.)
+
+> **Windows:** the `--win-console` flag is required. Without it `jpackage`
+> builds a GUI-subsystem launcher that detaches from the terminal, so the tool
+> runs but you never see its `stdout`. On macOS/Linux the flag is ignored.
 
 ### Just want a runnable JAR?
 
