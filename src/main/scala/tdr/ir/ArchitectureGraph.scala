@@ -1,39 +1,121 @@
 package tdr.ir
 
-/** A single file in the codebase together with the metrics we track for it.
-  *
-  * This is the language-independent unit of the Architecture IR described in
-  * the README: every supported language is reduced to nodes like this.
-  */
-final case class FileNode(
-    path: String,
-    loc: Int,
-    churn: Int,
-    contributors: Int
-)
-
-/** The Architecture Intermediate Representation.
-  *
-  * `nodes` maps a file path to its metrics. `edges` maps a file path to the set
-  * of file paths it depends on (i.e. imports). The graph is intentionally
-  * language-agnostic so that the analysis engine never needs to know how the
-  * edges were produced.
-  */
+/**
+ * The Architecture Intermediate Representation.
+ *
+ * This graph is language-independent.
+ *
+ * Nodes:
+ *   CodeEntity objects representing files, classes, methods, etc.
+ *
+ * Edges:
+ *   CodeEdge objects representing relationships between entities.
+ *
+ * The edges collection is the source of truth.
+ *
+ * The indexes are derived lookup structures used to make queries fast:
+ *
+ * outgoingIndex:
+ *   "What does this entity depend on?"
+ *
+ * incomingIndex:
+ *   "What entities depend on this one?"
+ *
+ * The indexes do NOT create duplicate relationships. They only point to
+ * existing CodeEdge instances so queries do not need to scan the entire edge set.
+ */
 final case class ArchitectureGraph(
-    nodes: Map[String, FileNode],
-    edges: Map[String, Set[String]]
+    nodes: Map[EntityId, CodeEntity],
+    edges: Set[CodeEdge],
+    outgoingIndex: Map[EntityId, Set[CodeEdge]],
+    incomingIndex: Map[EntityId, Set[CodeEdge]]
 ):
-  /** Files that `path` depends on (outgoing edges). */
-  def dependencies(path: String): Set[String] =
-    edges.getOrElse(path, Set.empty)
 
-  /** Files that depend on `path` (incoming edges). */
-  def dependents(path: String): Set[String] =
-    edges.collect { case (from, tos) if tos.contains(path) => from }.toSet
+  /**
+   * Find an entity by its ID.
+   */
+  def entity(id: EntityId): Option[CodeEntity] =
+    nodes.get(id)
 
-  /** Total coupling: how many other files this file touches or is touched by. */
-  def coupling(path: String): Int =
-    (dependencies(path) ++ dependents(path)).size
+
+  /**
+   * All outgoing relationships from an entity.
+   */
+  def outgoing(id: EntityId): Set[CodeEdge] =
+    outgoingIndex.getOrElse(id, Set.empty)
+
+
+  /**
+   * All incoming relationships to an entity.
+   */
+  def incoming(id: EntityId): Set[CodeEdge] =
+    incomingIndex.getOrElse(id, Set.empty)
+
+
+  /**
+   * Entities this node depends on.
+   *
+   * Example:
+   * UserService -> DatabaseService
+   */
+  def dependencies(id: EntityId): Set[EntityId] =
+    outgoing(id)
+      .filter(_.relation == RelationType.DependsOn)
+      .map(_.to)
+
+
+  /**
+   * Entities that depend on this node.
+   *
+   * Example:
+   * Five services depend on DatabaseService
+   */
+  def dependents(id: EntityId): Set[EntityId] =
+    incoming(id)
+      .filter(_.relation == RelationType.DependsOn)
+      .map(_.from)
+
+
+  /**
+   * Basic coupling metric.
+   *
+   * Number of unique entities connected through dependency relationships.
+   */
+  def coupling(id: EntityId): Int =
+    (dependencies(id) ++ dependents(id)).size
+
+
 
 object ArchitectureGraph:
-  val empty: ArchitectureGraph = ArchitectureGraph(Map.empty, Map.empty)
+
+  /**
+   * Creates an empty graph.
+   *
+   * Useful for tests or incremental building.
+   */
+  val empty: ArchitectureGraph =
+    ArchitectureGraph(
+      nodes = Map.empty,
+      edges = Set.empty,
+      outgoingIndex = Map.empty,
+      incomingIndex = Map.empty
+    )
+
+
+  /**
+   * Builds indexes from the canonical edge collection.
+   *
+   * Edges are the truth.
+   * Indexes are generated from edges.
+   */
+  def build(
+      nodes: Map[EntityId, CodeEntity],
+      edges: Set[CodeEdge]
+  ): ArchitectureGraph =
+
+    ArchitectureGraph(
+      nodes = nodes,
+      edges = edges,
+      outgoingIndex = edges.groupBy(_.from),
+      incomingIndex = edges.groupBy(_.to)
+    )
