@@ -1,20 +1,23 @@
 package tdr.types
 
+import tdr.ir.EntityId
+
 // This is a "unified" type for all code entities
 enum EntityKind:
   case Class
   case Interface
   case Method
-  // Note: This is parameters for a function or method, NOT the parameters of the class
+  // Note: This is parameters for a function or method, NOT the generics of a class
   case Parameter
   case Field
   case Module
 
 // This is just a Node in the graph: there is no edge relationship represented here,
-// that's the 
+// that's the responsibility of the graph structure (which is separate for decoupling the graph from the entities)
 final case class CodeEntity(
-  id: String,
+  id: EntityId,
   name: String,
+  // Necessary for the report to show which file the entity belongs to
   file: String,
   // This is the type of the entity (e.g. Class, Interface, Method, Parameter, Field, Module)
   kind: EntityKind,
